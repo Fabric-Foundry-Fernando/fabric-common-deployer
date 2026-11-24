@@ -1,0 +1,56 @@
+name: Deploy Fabric workspace
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub environment to deploy under (protection rules, OIDC subject).
+        type: string
+        required: false
+        default: dev-fabric
+      client_id:
+        description: Entra app (client) ID with a federated credential for the calling repo/environment.
+        type: string
+        required: true
+      tenant_id:
+        description: Entra tenant ID.
+        type: string
+        required: true
+      workspace_id:
+        description: Fabric workspace ID to update.
+        type: string
+        required: true
+      connection_id:
+        description: Fabric connection ID (type GitHub) used for the workspace's Git credentials.
+        type: string
+        required: true
+      commit_hash:
+        description: Commit to sync the workspace to. Defaults to the caller's github.sha.
+        type: string
+        required: false
+        default: ''
+
+jobs:
+  deploy:
+    name: Deploy to Fabric workspace
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    # Serialise deploys per workspace; never cancel one mid-updateFromGit.
+    concurrency:
+      group: fabric-workspace-${{ inputs.workspace_id }}
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      # Full path required: a ./ path would resolve against the caller's repo.
+      # This ref does NOT follow the ref callers use for this workflow; when
+      # tagging a release (e.g. v1), change @main to that tag in the tagged commit.
+      - name: Deploy to Fabric workspace
+        uses: Fabric-Foundry-Fernando/fabric-common-deployer/.github/actions/deploy-fabric-workspace@main
+        with:
+          client_id: ${{ inputs.client_id }}
+          tenant_id: ${{ inputs.tenant_id }}
+          workspace_id: ${{ inputs.workspace_id }}
+          connection_id: ${{ inputs.connection_id }}
+          commit_hash: ${{ inputs.commit_hash }}
