@@ -4,14 +4,14 @@ Agent instructions for `fabric-common-deployer`.
 
 ## Purpose
 
-- Maintain the Fabric deployment utility in `fabric-cd/.deploy/deploy_to_dev.py` and its tests in `fabric-cd/tests/deploy/`.
+- Maintain the Fabric deployment utility in `fabric-cd/.deploy/deploy.py` and its tests in `fabric-cd/tests/deploy/`.
 - Maintain the reusable GitHub Actions workflow and composite action that other repos call to deploy.
 - Prioritize safe, test-backed changes to Git-to-Fabric workspace sync behavior.
 
 ## Project Map
 
-- `fabric-cd/.deploy/deploy_to_dev.py`: CLI script that authenticates with a federated token and calls Fabric Git APIs (`myGitCredentials`, `git/status`, `updateFromGit`).
-- `fabric-cd/tests/deploy/test_deploy_to_dev.py`: unit tests using `pytest` and `unittest.mock`.
+- `fabric-cd/.deploy/deploy.py`: CLI script that authenticates with a federated token and calls Fabric Git APIs (`myGitCredentials`, `git/status`, `updateFromGit`).
+- `fabric-cd/tests/deploy/test_deploy.py`: unit tests using `pytest` and `unittest.mock`.
 - `.github/workflows/deploy-fabric-workspace.yml`: reusable workflow (`workflow_call`) that callers `uses:`. Binds the GitHub environment and `id-token: write`, then calls the composite action.
 - `.github/actions/deploy-fabric-workspace/action.yml`: composite action. It sets up Python 3.12, installs requirements, then, in one step, gets a GitHub OIDC token (audience `api://AzureADTokenExchange`) and runs the script with it as `FEDERATED_TOKEN`.
 - `.github/workflows/test.yml`: runs the pytest suite on PRs and pushes to `main`.
@@ -30,7 +30,7 @@ From repo root:
 ```bash
 python3.12 -m pip install -r fabric-cd/.deploy/requirements-test.txt
 python3.12 -m pip install -r fabric-cd/.deploy/requirements.txt
-pytest fabric-cd/tests/deploy/test_deploy_to_dev.py -v
+pytest fabric-cd/tests/deploy/test_deploy.py -v
 actionlint .github/workflows/*.yml
 ```
 
@@ -53,10 +53,10 @@ actionlint .github/workflows/*.yml
 
 ## Testing Conventions
 
-- Mock external calls at module import paths used by the code under test (for example `deploy_to_dev.requests.post`).
+- Mock external calls at module import paths used by the code under test (for example `deploy.requests.post`).
 - For polling behavior (`202` responses), always mock both polling responses and `time.sleep`.
 - Use `monkeypatch` for environment variable tests (`FEDERATED_TOKEN`).
-- If you change CLI args or API request payloads, update/add tests in `fabric-cd/tests/deploy/test_deploy_to_dev.py` in the same change. Also update the composite action's arguments.
+- If you change CLI args or API request payloads, update/add tests in `fabric-cd/tests/deploy/test_deploy.py` in the same change. Also update the composite action's arguments.
 
 ## Pitfalls
 
@@ -68,7 +68,7 @@ actionlint .github/workflows/*.yml
 
 ## Change Checklist
 
-- Run `pytest fabric-cd/tests/deploy/test_deploy_to_dev.py -v`.
+- Run `pytest fabric-cd/tests/deploy/test_deploy.py -v`.
 - Run `actionlint` on changed workflows.
 - Confirm no credentials or tokens are logged.
 - Keep changes scoped to deployment behavior, workflows and tests unless explicitly asked otherwise.

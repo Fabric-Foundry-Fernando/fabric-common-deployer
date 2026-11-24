@@ -5,12 +5,12 @@ from contextlib import contextmanager
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.deploy"))
-import deploy_to_dev
+import deploy
 
 
 def test_build_credential_passes_correct_arguments():
-    with patch("deploy_to_dev.ClientAssertionCredential") as MockCred:
-        deploy_to_dev.build_credential("my-tenant", "my-client", "my-token")
+    with patch("deploy.ClientAssertionCredential") as MockCred:
+        deploy.build_credential("my-tenant", "my-client", "my-token")
         call_kwargs = MockCred.call_args[1]
         assert call_kwargs["tenant_id"] == "my-tenant"
         assert call_kwargs["client_id"] == "my-client"
@@ -31,10 +31,10 @@ def test_update_workspace_sets_credentials_then_passes_workspace_head():
     mock_update_resp = MagicMock()
     mock_update_resp.status_code = 200
 
-    with patch("deploy_to_dev.requests.patch", return_value=mock_creds_resp) as mock_patch, \
-         patch("deploy_to_dev.requests.get", return_value=mock_status_resp), \
-         patch("deploy_to_dev.requests.post", return_value=mock_update_resp) as mock_post:
-        deploy_to_dev.update_workspace_from_git("ws-id", "commit-abc", "conn-id", mock_credential)
+    with patch("deploy.requests.patch", return_value=mock_creds_resp) as mock_patch, \
+         patch("deploy.requests.get", return_value=mock_status_resp), \
+         patch("deploy.requests.post", return_value=mock_update_resp) as mock_post:
+        deploy.update_workspace_from_git("ws-id", "commit-abc", "conn-id", mock_credential)
 
         patch_body = mock_patch.call_args[1]["json"]
         assert patch_body["source"] == "ConfiguredConnection"
@@ -64,11 +64,11 @@ def test_update_workspace_polls_on_202():
     mock_poll_resp.json.return_value = {"status": "Succeeded"}
     mock_poll_resp.headers = {"Retry-After": "1"}
 
-    with patch("deploy_to_dev.requests.patch", return_value=mock_creds_resp), \
-         patch("deploy_to_dev.requests.get", side_effect=[mock_status_resp, mock_poll_resp]), \
-         patch("deploy_to_dev.requests.post", return_value=mock_update_resp), \
-         patch("deploy_to_dev.time.sleep"):
-        deploy_to_dev.update_workspace_from_git("ws-id", "commit-abc", "conn-id", mock_credential)
+    with patch("deploy.requests.patch", return_value=mock_creds_resp), \
+         patch("deploy.requests.get", side_effect=[mock_status_resp, mock_poll_resp]), \
+         patch("deploy.requests.post", return_value=mock_update_resp), \
+         patch("deploy.time.sleep"):
+        deploy.update_workspace_from_git("ws-id", "commit-abc", "conn-id", mock_credential)
 
 
 def test_update_workspace_raises_on_failed_operation():
@@ -90,35 +90,35 @@ def test_update_workspace_raises_on_failed_operation():
     mock_poll_resp.json.return_value = {"status": "Failed"}
     mock_poll_resp.headers = {}
 
-    with patch("deploy_to_dev.requests.patch", return_value=mock_creds_resp), \
-         patch("deploy_to_dev.requests.get", side_effect=[mock_status_resp, mock_poll_resp]), \
-         patch("deploy_to_dev.requests.post", return_value=mock_update_resp), \
-         patch("deploy_to_dev.time.sleep"):
+    with patch("deploy.requests.patch", return_value=mock_creds_resp), \
+         patch("deploy.requests.get", side_effect=[mock_status_resp, mock_poll_resp]), \
+         patch("deploy.requests.post", return_value=mock_update_resp), \
+         patch("deploy.time.sleep"):
         with pytest.raises(RuntimeError, match="Failed"):
-            deploy_to_dev.update_workspace_from_git("ws-id", "commit-abc", "conn-id", mock_credential)
+            deploy.update_workspace_from_git("ws-id", "commit-abc", "conn-id", mock_credential)
 
 
 def test_main_reads_federated_token_from_environment(monkeypatch):
     monkeypatch.setenv("FEDERATED_TOKEN", "env-token")
-    with patch("deploy_to_dev.build_credential") as mock_cred, \
-         patch("deploy_to_dev.update_workspace_from_git"):
+    with patch("deploy.build_credential") as mock_cred, \
+         patch("deploy.update_workspace_from_git"):
         mock_cred.return_value = MagicMock()
         with patch("sys.argv", [
-            "deploy_to_dev.py",
+            "deploy.py",
             "--client_id", "cid",
             "--tenant_id", "tid",
             "--workspace_id", "wsid",
             "--commit_hash", "abc123",
             "--connection_id", "conn-id",
         ]):
-            deploy_to_dev.main()
+            deploy.main()
         mock_cred.assert_called_once_with("tid", "cid", "env-token")
 
 
 def test_main_raises_when_federated_token_env_missing(monkeypatch):
     monkeypatch.delenv("FEDERATED_TOKEN", raising=False)
     with patch("sys.argv", [
-        "deploy_to_dev.py",
+        "deploy.py",
         "--client_id", "cid",
         "--tenant_id", "tid",
         "--workspace_id", "wsid",
@@ -126,13 +126,13 @@ def test_main_raises_when_federated_token_env_missing(monkeypatch):
         "--connection_id", "conn-id",
     ]):
         with pytest.raises(KeyError):
-            deploy_to_dev.main()
+            deploy.main()
 
 
 def test_main_exits_on_missing_required_arguments():
-    with patch("sys.argv", ["deploy_to_dev.py", "--client_id", "cid"]):
+    with patch("sys.argv", ["deploy.py", "--client_id", "cid"]):
         with pytest.raises(SystemExit):
-            deploy_to_dev.main()
+            deploy.main()
 
 
 def _ok_resp(json_body=None):
@@ -151,16 +151,16 @@ def _fabric_api(get_responses):
     """Patch the Fabric HTTP calls; yields (mock_get, mock_post)."""
     mock_update_resp = MagicMock()
     mock_update_resp.status_code = 200
-    with patch("deploy_to_dev.requests.patch", return_value=_ok_resp()), \
-         patch("deploy_to_dev.requests.get", side_effect=get_responses) as mock_get, \
-         patch("deploy_to_dev.requests.post", return_value=mock_update_resp) as mock_post:
+    with patch("deploy.requests.patch", return_value=_ok_resp()), \
+         patch("deploy.requests.get", side_effect=get_responses) as mock_get, \
+         patch("deploy.requests.post", return_value=mock_update_resp) as mock_post:
         yield mock_get, mock_post
 
 
 def _update(expected_branch):
     credential = MagicMock()
     credential.get_token.return_value.token = "test-token"
-    deploy_to_dev.update_workspace_from_git(
+    deploy.update_workspace_from_git(
         "ws-id", "commit-abc", "conn-id", credential, expected_branch=expected_branch
     )
 
@@ -214,7 +214,7 @@ def test_branch_check_skipped_when_expected_branch_not_given(expected_branch):
 
 
 _MAIN_ARGV = [
-    "deploy_to_dev.py",
+    "deploy.py",
     "--client_id", "cid",
     "--tenant_id", "tid",
     "--workspace_id", "wsid",
@@ -225,17 +225,17 @@ _MAIN_ARGV = [
 
 def test_main_passes_expected_branch(monkeypatch):
     monkeypatch.setenv("FEDERATED_TOKEN", "env-token")
-    with patch("deploy_to_dev.build_credential"), \
-         patch("deploy_to_dev.update_workspace_from_git") as mock_update, \
+    with patch("deploy.build_credential"), \
+         patch("deploy.update_workspace_from_git") as mock_update, \
          patch("sys.argv", _MAIN_ARGV + ["--expected_branch", "dev"]):
-        deploy_to_dev.main()
+        deploy.main()
     assert mock_update.call_args.kwargs["expected_branch"] == "dev"
 
 
 def test_main_expected_branch_defaults_to_none(monkeypatch):
     monkeypatch.setenv("FEDERATED_TOKEN", "env-token")
-    with patch("deploy_to_dev.build_credential"), \
-         patch("deploy_to_dev.update_workspace_from_git") as mock_update, \
+    with patch("deploy.build_credential"), \
+         patch("deploy.update_workspace_from_git") as mock_update, \
          patch("sys.argv", _MAIN_ARGV):
-        deploy_to_dev.main()
+        deploy.main()
     assert mock_update.call_args.kwargs["expected_branch"] is None

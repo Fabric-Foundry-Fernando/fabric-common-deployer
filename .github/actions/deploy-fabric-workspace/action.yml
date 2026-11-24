@@ -71,7 +71,7 @@ runs:
         export FEDERATED_TOKEN="$token"
         unset token
 
-        python "$ACTION_PATH/../../../fabric-cd/.deploy/deploy_to_dev.py" \
+        python "$ACTION_PATH/../../../fabric-cd/.deploy/deploy.py" \
           --client_id "$CLIENT_ID" \
           --tenant_id "$TENANT_ID" \
           --workspace_id "$WORKSPACE_ID" \
