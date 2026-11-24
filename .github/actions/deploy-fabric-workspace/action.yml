@@ -12,8 +12,9 @@ inputs:
     description: Entra tenant ID.
     required: true
   workspace_id:
-    description: Fabric workspace ID to update.
-    required: true
+    description: Fabric workspace ID to update. Defaults to the bound environment's FABRIC_WORKSPACE_ID variable.
+    required: false
+    default: ''
   connection_id:
     description: Fabric connection ID (type GitHub) used for the workspace's Git credentials.
     required: true
@@ -45,9 +46,16 @@ runs:
         WORKSPACE_ID: ${{ inputs.workspace_id }}
         CONNECTION_ID: ${{ inputs.connection_id }}
         COMMIT_HASH: ${{ inputs.commit_hash || github.sha }}
+        # Empty, which skips the branch check, for non-branch triggers (e.g. tags) and
+        # when an explicit commit_hash is passed (it may come from another branch).
+        EXPECTED_BRANCH: ${{ github.ref_type == 'branch' && inputs.commit_hash == '' && github.ref_name || '' }}
       # The OIDC token is fetched and used in this one step so it never reaches
       # GITHUB_ENV or later steps in the caller's job.
       run: |
+        if [ -z "${WORKSPACE_ID:-}" ]; then
+          echo "::error::No workspace ID. Pass 'workspace_id' or set the FABRIC_WORKSPACE_ID variable on the GitHub environment this job runs in."
+          exit 1
+        fi
         if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
           echo "::error::GitHub OIDC is unavailable. The calling job needs 'permissions: id-token: write'."
           exit 1
@@ -63,9 +71,10 @@ runs:
         export FEDERATED_TOKEN="$token"
         unset token
 
-        python "$ACTION_PATH/../../../fabric-cd/.deploy/deploy_to_dev.py" \
+        python "$ACTION_PATH/../../../fabric-cd/.deploy/deploy.py" \
           --client_id "$CLIENT_ID" \
           --tenant_id "$TENANT_ID" \
           --workspace_id "$WORKSPACE_ID" \
           --commit_hash "$COMMIT_HASH" \
-          --connection_id "$CONNECTION_ID"
+          --connection_id "$CONNECTION_ID" \
+          --expected_branch "$EXPECTED_BRANCH"

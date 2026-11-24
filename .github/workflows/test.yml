@@ -31,4 +31,4 @@ jobs:
           python -m pip install -r fabric-cd/.deploy/requirements-test.txt
 
       - name: Run tests
-        run: pytest fabric-cd/tests/deploy/test_deploy_to_dev.py -v
+        run: pytest fabric-cd/tests/deploy/test_deploy.py -v

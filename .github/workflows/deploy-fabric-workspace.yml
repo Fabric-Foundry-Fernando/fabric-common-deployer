@@ -17,9 +17,10 @@ on:
         type: string
         required: true
       workspace_id:
-        description: Fabric workspace ID to update.
+        description: Fabric workspace ID to update. Defaults to the bound environment's FABRIC_WORKSPACE_ID variable.
         type: string
-        required: true
+        required: false
+        default: ''
       connection_id:
         description: Fabric connection ID (type GitHub) used for the workspace's Git credentials.
         type: string
@@ -35,9 +36,10 @@ jobs:
     name: Deploy to Fabric workspace
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    # Serialise deploys per workspace; never cancel one mid-updateFromGit.
+    # Serialise deploys per caller repo, environment and (if passed) workspace;
+    # never cancel one mid-updateFromGit.
     concurrency:
-      group: fabric-workspace-${{ inputs.workspace_id }}
+      group: fabric-${{ github.repository }}-${{ inputs.environment }}-${{ inputs.workspace_id }}
       cancel-in-progress: false
     permissions:
       id-token: write
@@ -51,6 +53,8 @@ jobs:
         with:
           client_id: ${{ inputs.client_id }}
           tenant_id: ${{ inputs.tenant_id }}
-          workspace_id: ${{ inputs.workspace_id }}
+          # Read at step level, where the environment's variables are visible.
+          # An explicit input wins over the environment variable.
+          workspace_id: ${{ inputs.workspace_id || vars.FABRIC_WORKSPACE_ID }}
           connection_id: ${{ inputs.connection_id }}
           commit_hash: ${{ inputs.commit_hash }}
