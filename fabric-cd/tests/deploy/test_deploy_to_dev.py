@@ -1,6 +1,7 @@
 import os
 import sys
 import pytest
+from contextlib import contextmanager
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.deploy"))
@@ -132,3 +133,109 @@ def test_main_exits_on_missing_required_arguments():
     with patch("sys.argv", ["deploy_to_dev.py", "--client_id", "cid"]):
         with pytest.raises(SystemExit):
             deploy_to_dev.main()
+
+
+def _ok_resp(json_body=None):
+    resp = MagicMock()
+    resp.ok = True
+    resp.json.return_value = json_body or {}
+    return resp
+
+
+def _connection_resp(branch_name):
+    return _ok_resp({"gitProviderDetails": {"branchName": branch_name}})
+
+
+@contextmanager
+def _fabric_api(get_responses):
+    """Patch the Fabric HTTP calls; yields (mock_get, mock_post)."""
+    mock_update_resp = MagicMock()
+    mock_update_resp.status_code = 200
+    with patch("deploy_to_dev.requests.patch", return_value=_ok_resp()), \
+         patch("deploy_to_dev.requests.get", side_effect=get_responses) as mock_get, \
+         patch("deploy_to_dev.requests.post", return_value=mock_update_resp) as mock_post:
+        yield mock_get, mock_post
+
+
+def _update(expected_branch):
+    credential = MagicMock()
+    credential.get_token.return_value.token = "test-token"
+    deploy_to_dev.update_workspace_from_git(
+        "ws-id", "commit-abc", "conn-id", credential, expected_branch=expected_branch
+    )
+
+
+_HEAD = {"workspaceHead": "head-abc"}
+
+
+def test_branch_check_passes_when_branch_matches():
+    with _fabric_api([_connection_resp("dev"), _ok_resp(_HEAD)]) as (mock_get, mock_post):
+        _update("dev")
+    get_urls = [c.args[0] for c in mock_get.call_args_list]
+    assert get_urls[0].endswith("/workspaces/ws-id/git/connection")
+    assert get_urls[1].endswith("/workspaces/ws-id/git/status")
+    mock_post.assert_called_once()
+
+
+def test_branch_check_raises_on_mismatch():
+    with _fabric_api([_connection_resp("test"), _ok_resp(_HEAD)]) as (_, mock_post):
+        with pytest.raises(RuntimeError, match="dev") as excinfo:
+            _update("dev")
+    assert "test" in str(excinfo.value)
+    mock_post.assert_not_called()
+
+
+def test_branch_check_raises_when_workspace_not_git_connected():
+    with _fabric_api([_ok_resp({"gitProviderDetails": None}), _ok_resp(_HEAD)]) as (_, mock_post):
+        with pytest.raises(RuntimeError, match="not connected"):
+            _update("dev")
+    mock_post.assert_not_called()
+
+
+def test_branch_check_raises_on_connection_http_error():
+    conn_resp = MagicMock()
+    conn_resp.ok = False
+    conn_resp.status_code = 403
+    conn_resp.text = "forbidden"
+    with _fabric_api([conn_resp, _ok_resp(_HEAD)]) as (mock_get, mock_post):
+        with pytest.raises(RuntimeError, match="403"):
+            _update("dev")
+    assert mock_get.call_count == 1
+    mock_post.assert_not_called()
+
+
+@pytest.mark.parametrize("expected_branch", [None, ""])
+def test_branch_check_skipped_when_expected_branch_not_given(expected_branch):
+    with _fabric_api([_ok_resp(_HEAD)]) as (mock_get, mock_post):
+        _update(expected_branch)
+    get_urls = [c.args[0] for c in mock_get.call_args_list]
+    assert not any("/git/connection" in url for url in get_urls)
+    mock_post.assert_called_once()
+
+
+_MAIN_ARGV = [
+    "deploy_to_dev.py",
+    "--client_id", "cid",
+    "--tenant_id", "tid",
+    "--workspace_id", "wsid",
+    "--commit_hash", "abc123",
+    "--connection_id", "conn-id",
+]
+
+
+def test_main_passes_expected_branch(monkeypatch):
+    monkeypatch.setenv("FEDERATED_TOKEN", "env-token")
+    with patch("deploy_to_dev.build_credential"), \
+         patch("deploy_to_dev.update_workspace_from_git") as mock_update, \
+         patch("sys.argv", _MAIN_ARGV + ["--expected_branch", "dev"]):
+        deploy_to_dev.main()
+    assert mock_update.call_args.kwargs["expected_branch"] == "dev"
+
+
+def test_main_expected_branch_defaults_to_none(monkeypatch):
+    monkeypatch.setenv("FEDERATED_TOKEN", "env-token")
+    with patch("deploy_to_dev.build_credential"), \
+         patch("deploy_to_dev.update_workspace_from_git") as mock_update, \
+         patch("sys.argv", _MAIN_ARGV):
+        deploy_to_dev.main()
+    assert mock_update.call_args.kwargs["expected_branch"] is None
