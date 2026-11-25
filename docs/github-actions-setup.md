@@ -154,6 +154,9 @@ The caller job must grant `id-token: write`. Without it, the run fails with a me
 - **`AADSTS700213` / "No matching federated identity record found":** the subject in step 2
   doesn't match the caller repo or environment exactly. It is case-sensitive. Check there's a
   credential for the environment that failed.
+- **`Input 'client_id' / 'tenant_id' / 'connection_id' is empty`:** the caller passes it from a
+  variable that is missing, misspelled, or defined on a GitHub environment. Variables used in the
+  caller's `with:` must be repository (or organization) variables. See step 4.
 - **`No workspace ID`:** the environment has no `FABRIC_WORKSPACE_ID` variable, or the push was to
   a branch that isn't mapped to an environment.
 - **`connected to branch 'X' but this run is for branch 'Y'`:** the environment's
