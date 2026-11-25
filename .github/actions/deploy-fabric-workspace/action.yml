@@ -52,6 +52,20 @@ runs:
       # The OIDC token is fetched and used in this one step so it never reaches
       # GITHUB_ENV or later steps in the caller's job.
       run: |
+        # Caller `with:` values are evaluated before the environment is bound, so an
+        # environment-level variable there resolves to '' silently. Fail early with a clear message.
+        missing=0
+        for pair in "client_id:CLIENT_ID" "tenant_id:TENANT_ID" "connection_id:CONNECTION_ID"; do
+          input="${pair%%:*}"
+          var="${pair#*:}"
+          if [ -z "${!var:-}" ]; then
+            echo "::error::Input '$input' is empty. If the caller passes it from a vars.* variable, define that variable at repository or organization level, not on a GitHub environment: environment variables aren't visible where the caller evaluates 'with:'."
+            missing=1
+          fi
+        done
+        if [ "$missing" -ne 0 ]; then
+          exit 1
+        fi
         if [ -z "${WORKSPACE_ID:-}" ]; then
           echo "::error::No workspace ID. Pass 'workspace_id' or set the FABRIC_WORKSPACE_ID variable on the GitHub environment this job runs in."
           exit 1
